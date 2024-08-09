@@ -1,0 +1,1 @@
+hubmap/epic-segmentation-mask-convert docker/Dockerfile	base_directory_build
