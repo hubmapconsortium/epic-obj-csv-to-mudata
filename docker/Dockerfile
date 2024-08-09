@@ -17,6 +17,8 @@ RUN python3 -m venv /opt/venv \
  && rm -rf /root/.cache/pip \
  && echo '. /opt/venv/bin/activate' >> /etc/bash.bashrc
 
+ENV PATH /opt/venv/bin:${PATH}
+
 WORKDIR /opt
 
 COPY bin/obj_feature_to_mudata.py /opt

@@ -16,7 +16,7 @@ outputs:
   mudata_file:
     type: File
     outputBinding:
-      glob: objects.mudata
+      glob: objects.h5mu
   metadata_json:
     type: File
     outputBinding:
