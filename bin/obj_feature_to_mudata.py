@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import re
 from argparse import ArgumentParser
 from collections import Counter, defaultdict
@@ -143,7 +144,7 @@ def read_csv(csv_path: Path) -> mudata.MuData:
 # list of unique annotation types
 
 
-def main(input_dir: Path):
+def read_convert_csv(input_dir: Path):
     csvs = input_dir.glob("**/*-objects.csv")
     mudatas = [read_csv(csv) for csv in csvs]
     obs = pd.concat([md.obs for md in mudatas])
@@ -183,14 +184,31 @@ def main(input_dir: Path):
     return mdata
 
 
-if __name__ == "__main__":
-    p = ArgumentParser()
-    p.add_argument("input_dir", type=Path)
-    p.add_argument("output_file", type=Path, nargs="?", default=Path("objects.h5mu"))
-    args = p.parse_args()
+def extract_metadata_write_json(mdata: mudata.MuData, output_json: Path):
+    data = {}
+    if "ontology" in mdata.obsm:
+        if "Object type" in mdata.obsm["ontology"]:
+            data["object_types"] = sorted(set(mdata.obsm["ontology"]["Object type"]))
+    if "Annotation tool" in mdata.obs:
+        data["annotation_tools"] = sorted(set(mdata.obs["Annotation tool"]))
+    with open(output_json, "w") as f:
+        json.dump(data, f)
 
-    mdata = main(args.input_dir)
+
+def main(input_dir: Path, output_h5mu: Path, output_json: Path):
+    mdata = read_convert_csv(input_dir)
     print("Overall MuData:")
     print(mdata)
 
-    mdata.write_h5mu(args.output_file)
+    mdata.write_h5mu(output_h5mu)
+    extract_metadata_write_json(mdata, output_json)
+
+
+if __name__ == "__main__":
+    p = ArgumentParser()
+    p.add_argument("input_dir", type=Path)
+    p.add_argument("output_h5mu", type=Path, nargs="?", default=Path("objects.h5mu"))
+    p.add_argument("output_json", type=Path, nargs="?", default=Path("metadata.json"))
+    args = p.parse_args()
+
+    mdata = main(args.input_dir, args.output_h5mu, args.output_json)
