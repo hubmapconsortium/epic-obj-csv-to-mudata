@@ -179,8 +179,8 @@ def read_convert_csv(input_dir: Path):
         for column in item.columns:
             if set(item.loc[:, column]) == nullable_boolean_values:
                 # found nullable boolean
-                item.loc[:, column][item.loc[:, column] == ""] = np.nan
-                item[column] = item[column].astype(float)
+                new_arr = [item if isinstance(item, bool) else None for item in item[column]]
+                item[column] = pd.array(new_arr)
     return mdata
 
 
