@@ -1,5 +1,6 @@
+*.h5mu
+*.hdf5
+*.json
+*.mudata
 .idea
 __pycache__
-*.h5mu
-*.mudata
-*.hdf5
