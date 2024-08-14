@@ -93,6 +93,7 @@ def read_csv(csv_path: Path) -> mudata.MuData:
     print("Reading", csv_path)
     header = pd.read_csv(csv_path, nrows=8, index_col=0, header=None)
     data = pd.read_csv(csv_path, skiprows=9, index_col=0)
+    data["Object ID"] = data.index
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
