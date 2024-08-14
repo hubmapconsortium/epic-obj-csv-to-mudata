@@ -32,7 +32,9 @@ def subset_df_cols(
     header: pd.DataFrame,
     col_type: str,
 ) -> pd.DataFrame:
-    return data.loc[:, header.columns[header.loc["Feature class", :] == col_type]]
+    df = data.loc[:, header.columns[header.loc["Feature class", :] == col_type]]
+    df.columns = [c.casefold() for c in df.columns]
+    return df
 
 
 def df_cols_to_anndata(
