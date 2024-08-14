@@ -194,6 +194,8 @@ def extract_metadata_write_json(mdata: mudata.MuData, output_json: Path):
             data["object_types"] = sorted(set(mdata.obsm["ontology"]["Object type"]))
     if "Annotation tool" in mdata.obs:
         data["annotation_tools"] = sorted(set(mdata.obs["Annotation tool"]))
+    if "Mask name" in mdata.obs:
+        data["mask_names"] = sorted(set(mdata.obs["Mask name"]))
     with open(output_json, "w") as f:
         json.dump(data, f)
 
