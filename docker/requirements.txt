@@ -1,4 +1,4 @@
-anndata
-mudata
-numpy
-pandas
+anndata~=0.10
+mudata~=0.3
+numpy~=2.0
+pandas~=2.2
