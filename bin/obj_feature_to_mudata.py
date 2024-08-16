@@ -93,7 +93,7 @@ def read_csv(csv_path: Path) -> mudata.MuData:
     header = pd.read_csv(csv_path, nrows=8, index_col=0, header=None)
     data = pd.read_csv(csv_path, skiprows=9, index_col=0)
     header.columns = data.columns
-    data["Object ID"] = data.index
+    orig_object_ids = list(data.index)
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
@@ -112,6 +112,7 @@ def read_csv(csv_path: Path) -> mudata.MuData:
     # mask data goes in overall .obs, spatial information goes in
     # the X_spatial key in .obsm
     obs, obs_col_mapping = subset_df_cols(data, header, known_column_classes["mask"])
+    obs["object id"] = orig_object_ids
     orig_col_mapping = {"obs": obs_col_mapping, "mod": {}}
     spatial, spatial_col_mapping = subset_df_cols(data, header, known_column_classes["spatial"])
     orig_col_mapping["obsm"] = {"X_spatial": spatial_col_mapping}
