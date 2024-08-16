@@ -2,7 +2,7 @@
 import json
 import re
 from argparse import ArgumentParser
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 import anndata
@@ -71,23 +71,6 @@ def check_duplicate_objects(data: pd.DataFrame):
     raise ValueError("\n".join(message_pieces))
 
 
-def reindex_temp(data: pd.DataFrame):
-    # TODO: remove this for production use on data expected to be well-formed
-    if len(set(data.index)) == data.shape[0]:
-        return
-    counts = data.index.value_counts()
-    duplicates = set(counts[counts > 1].index)
-    adj_counts = Counter()
-    new_index = []
-    for i in data.index:
-        if i in duplicates:
-            adj_counts[i] += 1
-            new_index.append(f"{i}-{adj_counts[i]}")
-        else:
-            new_index.append(i)
-    data.index = new_index
-
-
 def read_csv(csv_path: Path) -> mudata.MuData:
     print("Reading", csv_path)
     header = pd.read_csv(csv_path, nrows=8, index_col=0, header=None)
@@ -100,7 +83,6 @@ def read_csv(csv_path: Path) -> mudata.MuData:
     for i in range(header.shape[1]):
         if header.iloc[0, i] in type_mapping:
             data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[header.iloc[0, i]])
-    reindex_temp(data)
     check_duplicate_objects(data)
     data.index = data.index.astype(str)
     filename_piece = obj_file_pattern.match(csv_path.name).group(1)
@@ -149,10 +131,6 @@ def read_csv(csv_path: Path) -> mudata.MuData:
 
     print(mdata)
     return mdata
-
-
-# list of feature class in header
-# list of unique annotation types
 
 
 def read_convert_csv(input_dir: Path):
