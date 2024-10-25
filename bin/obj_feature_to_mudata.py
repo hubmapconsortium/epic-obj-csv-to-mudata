@@ -2,7 +2,7 @@
 import json
 import re
 from argparse import ArgumentParser
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 import anndata
@@ -31,16 +31,20 @@ def subset_df_cols(
     data: pd.DataFrame,
     header: pd.DataFrame,
     col_type: str,
-) -> pd.DataFrame:
-    return data.loc[:, header.columns[header.loc["Feature class", :] == col_type]]
+) -> tuple[pd.DataFrame, dict[str, str]]:
+    df = data.loc[:, header.columns[header.loc["Feature class", :] == col_type]]
+    new_columns = [c.casefold() for c in df.columns]
+    col_mapping = dict(zip(new_columns, df.columns))
+    df.columns = [c.casefold() for c in df.columns]
+    return df, col_mapping
 
 
 def df_cols_to_anndata(
     data: pd.DataFrame,
     header: pd.DataFrame,
     col_type: str,
-) -> anndata.AnnData:
-    X_df = subset_df_cols(data, header, col_type)
+) -> tuple[anndata.AnnData, dict[str, str]]:
+    X_df, mapping = subset_df_cols(data, header, col_type)
 
     var = pd.DataFrame(
         {
@@ -52,10 +56,7 @@ def df_cols_to_anndata(
         }
     )
 
-    return anndata.AnnData(
-        X=np.array(X_df),
-        var=var,
-    )
+    return anndata.AnnData(X=np.array(X_df), var=var), mapping
 
 
 def check_duplicate_objects(data: pd.DataFrame):
@@ -70,54 +71,43 @@ def check_duplicate_objects(data: pd.DataFrame):
     raise ValueError("\n".join(message_pieces))
 
 
-def reindex_temp(data: pd.DataFrame):
-    # TODO: remove this for production use on data expected to be well-formed
-    if len(set(data.index)) == data.shape[0]:
-        return
-    counts = data.index.value_counts()
-    duplicates = set(counts[counts > 1].index)
-    adj_counts = Counter()
-    new_index = []
-    for i in data.index:
-        if i in duplicates:
-            adj_counts[i] += 1
-            new_index.append(f"{i}-{adj_counts[i]}")
-        else:
-            new_index.append(i)
-    data.index = new_index
-
-
 def read_csv(csv_path: Path) -> mudata.MuData:
     print("Reading", csv_path)
     header = pd.read_csv(csv_path, nrows=8, index_col=0, header=None)
     data = pd.read_csv(csv_path, skiprows=9, index_col=0)
+    header.columns = data.columns
+    orig_object_ids = list(data.index)
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
     for i in range(header.shape[1]):
         if header.iloc[0, i] in type_mapping:
             data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[header.iloc[0, i]])
-        # if data.iloc[:, i]
-    reindex_temp(data)
     check_duplicate_objects(data)
     data.index = data.index.astype(str)
     filename_piece = obj_file_pattern.match(csv_path.name).group(1)
     data.index = [f"{filename_piece}-{i}" for i in data.index]
-
     data.index.name = "Object"
-    header.columns = data.columns
-
     other_col_types = set(header.iloc[2, :]) - known_col_sets
 
     # Special handling for known mask, data (X), and spatial keys:
     # mask data goes in overall .obs, spatial information goes in
     # the X_spatial key in .obsm
-    obs = subset_df_cols(data, header, known_column_classes["mask"])
-    obsm = {"X_spatial": subset_df_cols(data, header, known_column_classes["spatial"])}
+    obs, obs_col_mapping = subset_df_cols(data, header, known_column_classes["mask"])
+    obs["object id"] = orig_object_ids
+    orig_col_mapping = {"obs": obs_col_mapping, "mod": {}}
+    spatial, spatial_col_mapping = subset_df_cols(data, header, known_column_classes["spatial"])
+    orig_col_mapping["obsm"] = {"X_spatial": spatial_col_mapping}
+    obsm = {"X_spatial": spatial}
 
     # Each feature class of primary measurement gets its own AnnData
     # (maybe empty here if there are no columns of a particular class)
-    adatas = {col_class: df_cols_to_anndata(data, header, col_class) for col_class in X_cols}
+    adatas = {}
+    for col_class in X_cols:
+        ad, mapping = df_cols_to_anndata(data, header, col_class)
+        adatas[col_class] = ad
+        if mapping:
+            orig_col_mapping["mod"][col_class] = mapping
     adatas_to_use = {modality: adata for modality, adata in adatas.items() if adata.shape[1]}
     if not adatas_to_use:
         adatas_to_use["default"] = anndata.AnnData(
@@ -128,20 +118,19 @@ def read_csv(csv_path: Path) -> mudata.MuData:
 
     # Load everything else into its own key in .obsm (neighborhood, annotations)
     for remaining in other_col_types:
-        obsm[remaining] = subset_df_cols(data, header, remaining)
+        df, col_mapping = subset_df_cols(data, header, remaining)
+        obsm[remaining] = df
+        orig_col_mapping["obsm"][remaining] = col_mapping
 
     mdata = mudata.MuData(
         adatas_to_use,
         obs=obs,
         obsm=obsm,
+        uns={"column_orig_name_mapping": orig_col_mapping},
     )
 
     print(mdata)
     return mdata
-
-
-# list of feature class in header
-# list of unique annotation types
 
 
 def read_convert_csv(input_dir: Path):
@@ -172,7 +161,12 @@ def read_convert_csv(input_dir: Path):
     for key, pieces in mod_pieces.items():
         mod[key] = anndata.concat(pieces)
 
-    mdata = mudata.MuData(mod, obs=obs, obsm=obsm)
+    uns = defaultdict(dict)
+    for md in mudatas:
+        for key, value in md.uns.items():
+            uns[key] |= value
+
+    mdata = mudata.MuData(mod, obs=obs, obsm=obsm, uns=dict(uns))
     for key, item in mdata.obsm.items():
         if isinstance(item, np.ndarray):
             continue
@@ -187,10 +181,12 @@ def read_convert_csv(input_dir: Path):
 def extract_metadata_write_json(mdata: mudata.MuData, output_json: Path):
     data = {}
     if "ontology" in mdata.obsm:
-        if "Object type" in mdata.obsm["ontology"]:
-            data["object_types"] = sorted(set(mdata.obsm["ontology"]["Object type"]))
-    if "Annotation tool" in mdata.obs:
-        data["annotation_tools"] = sorted(set(mdata.obs["Annotation tool"]))
+        if "object type" in mdata.obsm["ontology"]:
+            data["object_types"] = sorted(set(mdata.obsm["ontology"]["object type"]))
+    if "annotation tool" in mdata.obs:
+        data["annotation_tools"] = sorted(set(mdata.obs["annotation tool"]))
+    if "mask name" in mdata.obs:
+        data["mask_names"] = sorted(set(mdata.obs["mask name"]))
     with open(output_json, "w") as f:
         json.dump(data, f)
 

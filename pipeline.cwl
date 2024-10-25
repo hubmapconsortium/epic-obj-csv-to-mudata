@@ -3,7 +3,7 @@ class: CommandLineTool
 label: OME-TIFF metadata normalization via bftools
 requirements:
   DockerRequirement:
-    dockerPull: hubmap/epic-segmentation-mask-convert:0.1
+    dockerPull: hubmap/epic-segmentation-mask-convert:latest
   InlineJavascriptRequirement: {}
 baseCommand: /opt/obj_feature_to_mudata.py
 

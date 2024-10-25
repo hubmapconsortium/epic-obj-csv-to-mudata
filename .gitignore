@@ -1,6 +1,7 @@
 *.h5mu
 *.hdf5
 *.json
+!pipeline-manifest.json
 *.mudata
 .idea
 __pycache__
