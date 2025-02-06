@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import csv
 import json
 import re
 from argparse import ArgumentParser
@@ -12,7 +13,7 @@ import pandas as pd
 
 mudata.set_options(pull_on_update=False)
 
-obj_file_pattern = re.compile(r"^(.+)-objects\.csv$")
+obj_file_pattern = re.compile(r"^(.+)-objects\.tsv$")
 known_column_classes = {
     "mask": "mask",
     "spatial": "spatial",
@@ -71,24 +72,38 @@ def check_duplicate_objects(data: pd.DataFrame):
     raise ValueError("\n".join(message_pieces))
 
 
-def read_csv(csv_path: Path) -> mudata.MuData:
-    print("Reading", csv_path)
-    header = pd.read_csv(csv_path, nrows=8, index_col=0, header=None)
-    data = pd.read_csv(csv_path, skiprows=9, index_col=0)
+def get_header_row_count(tsv_path: Path) -> int:
+    """
+    :param tsv_path:
+    :return: The value to use for `skiprows` in `pandas.read_table
+    """
+    with open(tsv_path, newline="") as f:
+        r = csv.reader(f, delimiter="\t")
+        for i, row in enumerate(r):
+            if all(col in {"", "[ THIS ROW MUST BE PRESENT AND EMPTY ]"} for col in row):
+                return i
+    raise ValueError("Couldn't find empty row between header rows and content")
+
+
+def read_tsv(tsv_path: Path) -> mudata.MuData:
+    print("Reading", tsv_path)
+    header_row_count = get_header_row_count(tsv_path)
+    header = pd.read_table(tsv_path, nrows=header_row_count, index_col=0, header=None)
+    data = pd.read_table(tsv_path, skiprows=header_row_count + 1, index_col=0)
     header.columns = data.columns
     orig_object_ids = list(data.index)
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
     for i in range(header.shape[1]):
-        if header.iloc[0, i] in type_mapping:
-            data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[header.iloc[0, i]])
+        if (column_type := header.loc["Type", :].iloc[i]) in type_mapping:
+            data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[column_type])
     check_duplicate_objects(data)
     data.index = data.index.astype(str)
-    filename_piece = obj_file_pattern.match(csv_path.name).group(1)
+    filename_piece = obj_file_pattern.match(tsv_path.name).group(1)
     data.index = [f"{filename_piece}-{i}" for i in data.index]
     data.index.name = "Object"
-    other_col_types = set(header.iloc[2, :]) - known_col_sets
+    other_col_types = set(header.loc["Feature class", :]) - known_col_sets
 
     # Special handling for known mask, data (X), and spatial keys:
     # mask data goes in overall .obs, spatial information goes in
@@ -133,9 +148,9 @@ def read_csv(csv_path: Path) -> mudata.MuData:
     return mdata
 
 
-def read_convert_csv(input_dir: Path):
-    csvs = input_dir.glob("**/*-objects.csv")
-    mudatas = [read_csv(csv) for csv in csvs]
+def read_convert_tsv(input_dir: Path):
+    tsvs = input_dir.glob("**/*-objects.tsv")
+    mudatas = [read_tsv(tsv) for tsv in tsvs]
     obs = pd.concat([md.obs for md in mudatas])
     obsm_pieces = defaultdict(list)
     mod_pieces = defaultdict(list)
@@ -187,12 +202,21 @@ def extract_metadata_write_json(mdata: mudata.MuData, output_json: Path):
         data["annotation_tools"] = sorted(set(mdata.obs["annotation tool"]))
     if "mask name" in mdata.obs:
         data["mask_names"] = sorted(set(mdata.obs["mask name"]))
+    image_dimension = "2D"
+    if "X_spatial" in mdata.obsm:
+        # might be a DataFrame
+        spatial_array = np.array(mdata.obsm["X_spatial"])
+        if spatial_array.shape[1] >= 3:
+            z_value_count = len(np.unique(spatial_array[:, 2]))
+            if z_value_count > 1:
+                image_dimension = "3D"
+    data["image_dimension"] = image_dimension
     with open(output_json, "w") as f:
         json.dump(data, f)
 
 
 def main(input_dir: Path, output_h5mu: Path, output_json: Path):
-    mdata = read_convert_csv(input_dir)
+    mdata = read_convert_tsv(input_dir)
     print("Overall MuData:")
     print(mdata)
 
