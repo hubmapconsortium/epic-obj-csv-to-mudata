@@ -96,14 +96,14 @@ def read_tsv(tsv_path: Path) -> mudata.MuData:
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
     for i in range(header.shape[1]):
-        if header.iloc[0, i] in type_mapping:
-            data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[header.iloc[0, i]])
+        if (column_type := header.loc["Type", :].iloc[i]) in type_mapping:
+            data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[column_type])
     check_duplicate_objects(data)
     data.index = data.index.astype(str)
     filename_piece = obj_file_pattern.match(tsv_path.name).group(1)
     data.index = [f"{filename_piece}-{i}" for i in data.index]
     data.index.name = "Object"
-    other_col_types = set(header.iloc[2, :]) - known_col_sets
+    other_col_types = set(header.loc["Feature class", :]) - known_col_sets
 
     # Special handling for known mask, data (X), and spatial keys:
     # mask data goes in overall .obs, spatial information goes in
@@ -203,9 +203,9 @@ def extract_metadata_write_json(mdata: mudata.MuData, output_json: Path):
     if "mask name" in mdata.obs:
         data["mask_names"] = sorted(set(mdata.obs["mask name"]))
     image_dimension = "2D"
-    if "spatial" in mdata.obsm:
+    if "X_spatial" in mdata.obsm:
         # might be a DataFrame
-        spatial_array = np.array(mdata.obsm["spatial"])
+        spatial_array = np.array(mdata.obsm["X_spatial"])
         if spatial_array.shape[1] >= 3:
             z_value_count = len(np.unique(spatial_array[:, 2]))
             if z_value_count > 1:
