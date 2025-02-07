@@ -228,7 +228,7 @@ if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("input_dir", type=Path)
     p.add_argument("output_h5mu", type=Path, nargs="?", default=Path("objects.h5mu"))
-    p.add_argument("output_json", type=Path, nargs="?", default=Path("metadata.json"))
+    p.add_argument("output_json", type=Path, nargs="?", default=Path("calculated_metadata.json"))
     args = p.parse_args()
 
     mdata = main(args.input_dir, args.output_h5mu, args.output_json)
