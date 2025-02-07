@@ -17,7 +17,7 @@ outputs:
     type: File
     outputBinding:
       glob: objects.h5mu
-  metadata_json:
+  calculated_metadata_json:
     type: File
     outputBinding:
-      glob: metadata.json
+      glob: calculated_metadata.json
