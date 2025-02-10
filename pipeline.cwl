@@ -3,7 +3,7 @@ class: CommandLineTool
 label: OME-TIFF metadata normalization via bftools
 requirements:
   DockerRequirement:
-    dockerPull: hubmap/epic-segmentation-mask-convert:0.3.1
+    dockerPull: hubmap/epic-segmentation-mask-convert:latest
   InlineJavascriptRequirement: {}
 baseCommand: /opt/obj_feature_to_mudata.py
 
@@ -17,7 +17,7 @@ outputs:
     type: File
     outputBinding:
       glob: objects.h5mu
-  metadata_json:
+  calculated_metadata_json:
     type: File
     outputBinding:
-      glob: metadata.json
+      glob: calculated_metadata.json
