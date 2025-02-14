@@ -95,9 +95,9 @@ def read_tsv(tsv_path: Path) -> mudata.MuData:
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
     # without the same set of columns.
-    for i in range(header.shape[1]):
-        if (column_type := header.loc["Type", :].iloc[i]) in type_mapping:
-            data.iloc[:, i] = data.iloc[:, i].astype(type_mapping[column_type])
+    for column in header:
+        if (column_type := header.loc["Type", column]) in type_mapping:
+            data[column] = data[column].astype(type_mapping[column_type])
     check_duplicate_objects(data)
     data.index = data.index.astype(str)
     filename_piece = obj_file_pattern.match(tsv_path.name).group(1)
@@ -166,10 +166,10 @@ def read_convert_tsv(input_dir: Path):
         if all(isinstance(item, np.ndarray) for item in values):
             obsm[key] = np.vstack(values)
         else:
-            df = pd.concat(values)
+            df = pd.concat(values).copy()
             for col in df.columns:
                 if df.dtypes[col] == "object":
-                    df[col].fillna("", inplace=True)
+                    df[col] = df[col].fillna("")
             obsm[key] = df
 
     mod = {}
