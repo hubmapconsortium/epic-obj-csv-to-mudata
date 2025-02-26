@@ -91,6 +91,7 @@ def read_tsv(tsv_path: Path) -> mudata.MuData:
     header = pd.read_table(tsv_path, nrows=header_row_count, index_col=0, header=None)
     data = pd.read_table(tsv_path, skiprows=header_row_count + 1, index_col=0)
     header.columns = data.columns
+    header.loc["Feature class", :] = header.loc["Feature class", :].apply(str.casefold)
     orig_object_ids = list(data.index)
     # Use types in header in case Pandas is wrong, or data is malformed.
     # Coerce boolean to float, to allow NaNs if concatenating data frames
